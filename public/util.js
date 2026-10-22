@@ -38,7 +38,8 @@ export async function pedir(url, opciones = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: opciones.body && JSON.stringify(opciones.body),
   });
-  if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
+  if (res.status === 401) document.dispatchEvent(new Event('sin-sesion'));
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? res.statusText);
   return res.json();
 }
 

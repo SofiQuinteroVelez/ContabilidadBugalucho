@@ -11,10 +11,10 @@ const dias = [
 ];
 
 for (const [fecha, ingresos, qr, gastos, efectivo] of dias) {
-  guardarDia(fecha, { ingresos, qr, gastos, efectivo });
+  await guardarDia(fecha, { ingresos, qr, gastos, efectivo });
 }
 // La nómina no aparece en el Excel; se deduce de 3.475.500 + 90.000 − 2.323.500.
-guardarSemana('2026-10-05', { gasto_semanal: 0, maza: 90000, nomina: 1242000 });
+await guardarSemana('2026-10-05', { gasto_semanal: 0, maza: 90000, nomina: 1242000 });
 
-const { totales } = obtenerSemana('2026-10-05');
+const { totales } = await obtenerSemana('2026-10-05');
 console.log('Semana cargada. Total semana:', totales.totalSemana, '· Después nómina:', totales.despuesNomina);

@@ -105,6 +105,27 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .aviso.visible { opacity: 1; }
 .aviso.error { background: var(--negativo); color: #fff; }
 
+/* ---------- Inicio de sesión ---------- */
+.barra .pestanas { margin-left: auto; }
+.salir { color: var(--suave); }
+body.sin-sesion .barra, body.sin-sesion main { display: none; }
+.login {
+  min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+}
+.login-caja {
+  width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 16px; align-items: stretch;
+  background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); padding: 28px 24px;
+}
+.login-caja img { align-self: center; height: auto; max-width: 170px; }
+.login-caja label { display: flex; flex-direction: column; gap: 6px; font-size: .9rem; color: var(--suave); }
+.login-caja input {
+  font: inherit; font-size: 16px; color: var(--texto); padding: 12px; min-height: 48px;
+  border: 1px solid var(--borde); border-radius: 8px; background: var(--superficie);
+}
+.login-caja input:focus { outline: none; border-color: var(--acento); }
+.login-caja .boton { min-height: 48px; font-size: 1rem; }
+.login-error { margin: 0; min-height: 1.2em; color: var(--negativo); font-size: .9rem; text-align: center; }
+
 /* ---------- Dashboard ---------- */
 .anio { font-size: 1.3rem; min-width: 4ch; text-align: center; }
 
@@ -201,6 +222,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
   .barra { padding: 8px 16px; padding-top: max(8px, env(safe-area-inset-top)); }
   .marca img { height: 52px; }
   .marca { font-size: 1rem; gap: 10px; }
+  .salir { margin-left: auto; min-height: 44px; }
   .pestanas {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; border-radius: 0; gap: 0;
     padding: 6px 8px env(safe-area-inset-bottom); background: var(--superficie);

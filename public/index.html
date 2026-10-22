@@ -32,6 +32,7 @@
         <span>Historial</span>
       </button>
     </nav>
+    <button id="salir" class="boton-texto salir" hidden>Salir</button>
   </header>
 
   <main>
@@ -203,6 +204,18 @@
       </div>
     </section>
   </main>
+
+  <div id="pantalla-login" class="login" hidden>
+    <form id="form-login" class="login-caja">
+      <img src="/logo.png" alt="Bugalucho Restaurante" width="170" height="105">
+      <label>
+        <span>Contraseña</span>
+        <input type="password" name="contrasena" autocomplete="current-password" required>
+      </label>
+      <button type="submit" class="boton primario">Entrar</button>
+      <p id="error-login" class="login-error" role="alert"></p>
+    </form>
+  </div>
 
   <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
   <script src="/app.js" type="module"></script>

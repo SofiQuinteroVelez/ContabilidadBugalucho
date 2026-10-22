@@ -211,6 +211,49 @@ function mostrarVista(vista) {
 
 for (const b of document.querySelectorAll('.pestana')) b.addEventListener('click', () => mostrarVista(b.dataset.vista));
 
-cargarSemana(fechaActual);
-const vistaInicial = location.hash.slice(1);
-if (VISTAS.includes(vistaInicial)) mostrarVista(vistaInicial);
+// ---------- Sesión ----------
+
+function pedirContrasena() {
+  document.body.classList.add('sin-sesion');
+  $('#pantalla-login').hidden = false;
+  $('#form-login').contrasena.focus();
+}
+
+document.addEventListener('sin-sesion', pedirContrasena);
+
+$('#form-login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const boton = e.target.querySelector('button');
+  boton.disabled = true;
+  $('#error-login').textContent = '';
+  try {
+    await pedir('/api/login', { method: 'POST', body: { contrasena: e.target.contrasena.value } });
+    location.reload();
+  } catch (err) {
+    $('#error-login').textContent = err.message;
+    e.target.contrasena.select();
+  } finally {
+    boton.disabled = false;
+  }
+});
+
+$('#salir').addEventListener('click', async () => {
+  await pedir('/api/salir', { method: 'POST' }).catch(() => {});
+  location.reload();
+});
+
+async function iniciar() {
+  let sesion;
+  try {
+    sesion = await pedir('/api/sesion');
+  } catch (err) {
+    return aviso(`No se pudo conectar: ${err.message}`, true);
+  }
+  if (!sesion.activa) return pedirContrasena();
+  $('#salir').hidden = !sesion.requiere;
+  cargarSemana(fechaActual);
+  const vistaInicial = location.hash.slice(1);
+  if (VISTAS.includes(vistaInicial)) mostrarVista(vistaInicial);
+}
+
+iniciar();

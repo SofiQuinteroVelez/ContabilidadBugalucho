@@ -1,15 +1,27 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createClient } from '@libsql/client';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const raiz = dirname(fileURLToPath(import.meta.url));
-const rutaDb = process.env.BUGALUCHO_DB ?? join(raiz, 'data', 'bugalucho.db');
-mkdirSync(dirname(rutaDb), { recursive: true });
+// En Vercel los datos viven en Turso (TURSO_DATABASE_URL); en el computador, en data/bugalucho.db.
+function conectar() {
+  if (process.env.TURSO_DATABASE_URL) {
+    return createClient({ url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN });
+  }
+  if (process.env.VERCEL) throw new Error('Falta configurar TURSO_DATABASE_URL en Vercel');
+  const raiz = dirname(fileURLToPath(import.meta.url));
+  const ruta = process.env.BUGALUCHO_DB ?? join(raiz, 'data', 'bugalucho.db');
+  mkdirSync(dirname(ruta), { recursive: true });
+  return createClient({ url: pathToFileURL(ruta).href });
+}
 
-export const db = new DatabaseSync(rutaDb);
+let cliente;
+function db() {
+  cliente ??= conectar();
+  return cliente;
+}
 
-db.exec(`
+const ESQUEMA = `
   CREATE TABLE IF NOT EXISTS dias (
     fecha     TEXT PRIMARY KEY,          -- YYYY-MM-DD
     ingresos  INTEGER NOT NULL DEFAULT 0, -- Ingresos del día
@@ -39,7 +51,25 @@ db.exec(`
     monto        INTEGER NOT NULL CHECK (monto >= 0)
   );
   CREATE INDEX IF NOT EXISTS movimientos_fecha ON movimientos (fecha);
-`);
+`;
+
+let listo;
+// Crea las tablas una sola vez por proceso (o por arranque de la función en Vercel).
+function preparar() {
+  listo ??= db().executeMultiple(ESQUEMA).catch((err) => { listo = undefined; throw err; });
+  return listo;
+}
+
+async function consultar(sql, args = []) {
+  await preparar();
+  const rs = await db().execute({ sql, args });
+  return rs.rows.map((fila) => Object.fromEntries(rs.columns.map((c, i) => [c, fila[i]])));
+}
+
+async function ejecutar(sql, args = []) {
+  await preparar();
+  return db().execute({ sql, args });
+}
 
 // Fechas como texto YYYY-MM-DD, calculadas en UTC para evitar saltos por zona horaria.
 export function lunesDe(fecha) {
@@ -63,30 +93,28 @@ function entero(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function guardarDia(fecha, datos) {
-  const fila = Object.fromEntries(CAMPOS_DIA.map((c) => [c, entero(datos[c])]));
-  db.prepare(`
-    INSERT INTO dias (fecha, ingresos, qr, gastos, efectivo, notas)
-    VALUES (:fecha, :ingresos, :qr, :gastos, :efectivo, :notas)
+export async function guardarDia(fecha, datos) {
+  const valores = CAMPOS_DIA.map((c) => entero(datos[c]));
+  await ejecutar(`
+    INSERT INTO dias (fecha, ingresos, qr, gastos, efectivo, notas) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(fecha) DO UPDATE SET
       ingresos = excluded.ingresos, qr = excluded.qr, gastos = excluded.gastos,
       efectivo = excluded.efectivo, notas = excluded.notas
-  `).run({ fecha, ...fila, notas: String(datos.notas ?? '') });
+  `, [fecha, ...valores, String(datos.notas ?? '')]);
 }
 
-export function borrarDia(fecha) {
-  db.prepare('DELETE FROM dias WHERE fecha = ?').run(fecha);
+export async function borrarDia(fecha) {
+  await ejecutar('DELETE FROM dias WHERE fecha = ?', [fecha]);
 }
 
-export function guardarSemana(lunes, datos) {
-  const fila = Object.fromEntries(CAMPOS_SEMANA.map((c) => [c, entero(datos[c])]));
-  db.prepare(`
-    INSERT INTO semanas (lunes, gasto_semanal, maza, nomina, notas)
-    VALUES (:lunes, :gasto_semanal, :maza, :nomina, :notas)
+export async function guardarSemana(lunes, datos) {
+  const valores = CAMPOS_SEMANA.map((c) => entero(datos[c]));
+  await ejecutar(`
+    INSERT INTO semanas (lunes, gasto_semanal, maza, nomina, notas) VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(lunes) DO UPDATE SET
       gasto_semanal = excluded.gasto_semanal, maza = excluded.maza,
       nomina = excluded.nomina, notas = excluded.notas
-  `).run({ lunes, ...fila, notas: String(datos.notas ?? '') });
+  `, [lunes, ...valores, String(datos.notas ?? '')]);
 }
 
 function calcularTotales(dias, semana) {
@@ -106,33 +134,47 @@ function conTotal(d) {
   return { ...d, total: d.efectivo + d.qr }; // Total del día = efectivo + QR
 }
 
-export function obtenerSemana(fecha) {
-  const lunes = lunesDe(fecha);
-  const domingo = sumarDias(lunes, 6);
-  const dias = db
-    .prepare('SELECT * FROM dias WHERE fecha BETWEEN ? AND ? ORDER BY fecha')
-    .all(lunes, domingo)
-    .map(conTotal);
-  const semana = db.prepare('SELECT * FROM semanas WHERE lunes = ?').get(lunes) ?? {
-    lunes, gasto_semanal: 0, maza: 0, nomina: 0, notas: '',
-  };
-  return { lunes, domingo, dias, semana, totales: calcularTotales(dias, semana) };
+function semanaVacia(lunes) {
+  return { lunes, gasto_semanal: 0, maza: 0, nomina: 0, notas: '' };
 }
 
-export function listarSemanas() {
-  const lunesSet = new Set(db.prepare('SELECT lunes FROM semanas').all().map((r) => r.lunes));
-  for (const { fecha } of db.prepare('SELECT fecha FROM dias').all()) lunesSet.add(lunesDe(fecha));
-  return [...lunesSet]
+function armarSemana(lunes, dias, semana) {
+  return { lunes, domingo: sumarDias(lunes, 6), dias, semana, totales: calcularTotales(dias, semana) };
+}
+
+export async function obtenerSemana(fecha) {
+  const lunes = lunesDe(fecha);
+  const [dias, [semana]] = await Promise.all([
+    consultar('SELECT * FROM dias WHERE fecha BETWEEN ? AND ? ORDER BY fecha', [lunes, sumarDias(lunes, 6)]),
+    consultar('SELECT * FROM semanas WHERE lunes = ?', [lunes]),
+  ]);
+  return armarSemana(lunes, dias.map(conTotal), semana ?? semanaVacia(lunes));
+}
+
+// Dos consultas en total, agrupando en memoria: con la base en internet cada consulta cuenta.
+export async function listarSemanas() {
+  const [dias, semanas] = await Promise.all([
+    todosLosDias(),
+    consultar('SELECT * FROM semanas'),
+  ]);
+  const porLunes = new Map(semanas.map((s) => [s.lunes, { semana: s, dias: [] }]));
+  for (const d of dias) {
+    const lunes = lunesDe(d.fecha);
+    if (!porLunes.has(lunes)) porLunes.set(lunes, { semana: semanaVacia(lunes), dias: [] });
+    porLunes.get(lunes).dias.push(d);
+  }
+  return [...porLunes.keys()]
     .sort()
     .reverse()
     .map((lunes) => {
-      const { domingo, dias, semana, totales } = obtenerSemana(lunes);
-      return { lunes, domingo, diasRegistrados: dias.length, maza: semana.maza, nomina: semana.nomina, gastoSemanal: semana.gasto_semanal, ...totales };
+      const { semana, dias: diasSemana } = porLunes.get(lunes);
+      const { domingo, totales } = armarSemana(lunes, diasSemana, semana);
+      return { lunes, domingo, diasRegistrados: diasSemana.length, maza: semana.maza, nomina: semana.nomina, gastoSemanal: semana.gasto_semanal, ...totales };
     });
 }
 
-export function todosLosDias() {
-  return db.prepare('SELECT * FROM dias ORDER BY fecha').all().map(conTotal);
+export async function todosLosDias() {
+  return (await consultar('SELECT * FROM dias ORDER BY fecha')).map(conTotal);
 }
 
 // ---------- Movimientos y dashboard del dueño ----------
@@ -158,31 +200,33 @@ export function validarMovimiento(datos) {
   return m;
 }
 
-export function crearMovimiento(datos) {
-  const m = validarMovimiento(datos);
-  return db.prepare(`
-    INSERT INTO movimientos (fecha, tipo, cuenta, categoria, descripcion, monto)
-    VALUES (:fecha, :tipo, :cuenta, :categoria, :descripcion, :monto)
-  `).run(m).lastInsertRowid;
+function valoresMovimiento(m) {
+  return [m.fecha, m.tipo, m.cuenta, m.categoria, m.descripcion, m.monto];
 }
 
-export function actualizarMovimiento(id, datos) {
-  const m = validarMovimiento(datos);
-  db.prepare(`
-    UPDATE movimientos SET fecha = :fecha, tipo = :tipo, cuenta = :cuenta,
-      categoria = :categoria, descripcion = :descripcion, monto = :monto
-    WHERE id = :id
-  `).run({ ...m, id });
+export async function crearMovimiento(datos) {
+  const rs = await ejecutar(`
+    INSERT INTO movimientos (fecha, tipo, cuenta, categoria, descripcion, monto) VALUES (?, ?, ?, ?, ?, ?)
+  `, valoresMovimiento(validarMovimiento(datos)));
+  return Number(rs.lastInsertRowid);
 }
 
-export function borrarMovimiento(id) {
-  db.prepare('DELETE FROM movimientos WHERE id = ?').run(id);
+export async function actualizarMovimiento(id, datos) {
+  await ejecutar(`
+    UPDATE movimientos SET fecha = ?, tipo = ?, cuenta = ?, categoria = ?, descripcion = ?, monto = ?
+    WHERE id = ?
+  `, [...valoresMovimiento(validarMovimiento(datos)), id]);
 }
 
-export function listarMovimientos(anio) {
-  return db
-    .prepare("SELECT * FROM movimientos WHERE fecha BETWEEN ? AND ? ORDER BY fecha DESC, id DESC")
-    .all(`${anio}-01-01`, `${anio}-12-31`);
+export async function borrarMovimiento(id) {
+  await ejecutar('DELETE FROM movimientos WHERE id = ?', [id]);
+}
+
+export async function listarMovimientos(anio) {
+  return consultar(
+    'SELECT * FROM movimientos WHERE fecha BETWEEN ? AND ? ORDER BY fecha DESC, id DESC',
+    [`${anio}-01-01`, `${anio}-12-31`],
+  );
 }
 
 // Cuánto cambia cada cuenta con un movimiento.
@@ -197,8 +241,8 @@ function efecto(m) {
   return e;
 }
 
-export function dashboard(anio) {
-  const movimientos = listarMovimientos(anio).reverse(); // en orden cronológico
+export async function dashboard(anio) {
+  const movimientos = (await listarMovimientos(anio)).reverse(); // en orden cronológico
   const cuentas = Object.fromEntries(CUENTAS.map((c) => [c, { saldo: 0, entradas: 0, gastos: 0 }]));
   const meses = Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, banco: 0, efectivo: 0 }));
   const categorias = {};
