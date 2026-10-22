@@ -1,0 +1,14 @@
+{
+  "name": "contabilidad-bugalucho",
+  "version": "1.0.0",
+  "description": "Contabilidad diaria y semanal del restaurante Bugalucho",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node --watch --no-warnings server.js",
+    "seed": "node --no-warnings seed.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

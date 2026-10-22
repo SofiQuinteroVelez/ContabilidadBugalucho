@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Bugalucho">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icono-192.png">
+  <title>Bugalucho · Contabilidad</title>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="barra">
+    <h1 class="marca">
+      <img src="/logo.png" alt="Bugalucho Restaurante" width="104" height="64">
+    </h1>
+    <nav class="pestanas" role="tablist">
+      <button class="pestana activa" data-vista="semana" role="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        <span>Semana</span>
+      </button>
+      <button class="pestana" data-vista="dashboard" role="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="pestana" data-vista="historial" role="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span>Historial</span>
+      </button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="vista-semana">
+      <div class="navegacion">
+        <button id="anterior" class="boton-icono" aria-label="Semana anterior">‹</button>
+        <div class="rango">
+          <strong id="rango-semana"></strong>
+          <input type="date" id="ir-a-fecha" aria-label="Ir a fecha">
+        </div>
+        <button id="siguiente" class="boton-icono" aria-label="Semana siguiente">›</button>
+        <button id="hoy" class="boton">Hoy</button>
+      </div>
+
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Ingresos del día</th>
+              <th>Ingresos QR</th>
+              <th>Gastos del día</th>
+              <th>Efectivo</th>
+              <th class="col-total">Total del día</th>
+            </tr>
+          </thead>
+          <tbody id="filas"></tbody>
+          <tfoot>
+            <tr>
+              <th>Suma de la semana</th>
+              <td id="suma-ingresos" data-etiqueta="Ingresos"></td>
+              <td id="suma-qr" data-etiqueta="QR"></td>
+              <td id="suma-gastos" data-etiqueta="Gastos"></td>
+              <td id="suma-efectivo" data-etiqueta="Efectivo"></td>
+              <td id="suma-total" class="col-total"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="resumen">
+        <div class="linea"><span>Total semana</span><strong id="total-semana"></strong></div>
+        <label class="linea resta">
+          <span>Gasto semanal</span>
+          <input class="monto" data-semana="gasto_semanal" inputmode="numeric" placeholder="0">
+        </label>
+        <label class="linea suma">
+          <span>Maza <small>almuerzos semanales en efectivo</small></span>
+          <input class="monto" data-semana="maza" inputmode="numeric" placeholder="0">
+        </label>
+        <label class="linea resta">
+          <span>Nómina</span>
+          <input class="monto" data-semana="nomina" inputmode="numeric" placeholder="0">
+        </label>
+        <div class="linea final"><span>Después nómina</span><strong id="despues-nomina"></strong></div>
+      </div>
+
+    </section>
+
+    <section id="vista-dashboard" hidden>
+      <div class="navegacion">
+        <button id="anio-anterior" class="boton-icono" aria-label="Año anterior">‹</button>
+        <strong id="anio-titulo" class="anio"></strong>
+        <button id="anio-siguiente" class="boton-icono" aria-label="Año siguiente">›</button>
+      </div>
+
+      <div class="tarjetas">
+        <article class="tarjeta">
+          <h2><i class="clave clave-banco"></i>Banco (QR)</h2>
+          <p class="cifra" id="saldo-banco"></p>
+          <p class="detalle" id="detalle-banco"></p>
+        </article>
+        <article class="tarjeta">
+          <h2><i class="clave clave-efectivo"></i>Efectivo</h2>
+          <p class="cifra" id="saldo-efectivo"></p>
+          <p class="detalle" id="detalle-efectivo"></p>
+        </article>
+        <article class="tarjeta destacada">
+          <h2>Total disponible</h2>
+          <p class="cifra" id="saldo-total"></p>
+          <p class="detalle">Banco + efectivo en el año</p>
+        </article>
+      </div>
+
+      <div class="paneles">
+        <article class="panel">
+          <h3>Saldo al cierre de cada mes</h3>
+          <div class="leyenda">
+            <span><i class="clave clave-banco"></i>Banco (QR)</span>
+            <span><i class="clave clave-efectivo"></i>Efectivo</span>
+          </div>
+          <div id="grafica-saldos" class="grafica"></div>
+        </article>
+        <article class="panel">
+          <h3>Gastos por categoría</h3>
+          <div class="leyenda">
+            <span><i class="clave clave-banco"></i>Banco (QR)</span>
+            <span><i class="clave clave-efectivo"></i>Efectivo</span>
+          </div>
+          <div id="grafica-gastos"></div>
+        </article>
+      </div>
+
+      <article class="panel">
+        <h3 id="titulo-form">Registrar movimiento</h3>
+        <form id="form-movimiento" class="formulario" autocomplete="off">
+          <div class="segmentado" role="radiogroup" aria-label="Tipo">
+            <label><input type="radio" name="tipo" value="gasto" checked><span>Gasto</span></label>
+            <label><input type="radio" name="tipo" value="entrada"><span>Entrada</span></label>
+            <label><input type="radio" name="tipo" value="traslado"><span>Traslado</span></label>
+          </div>
+          <label>
+            <span id="etiqueta-cuenta">Se descuenta de</span>
+            <select name="cuenta">
+              <option value="efectivo">Efectivo</option>
+              <option value="banco">Banco (QR)</option>
+            </select>
+          </label>
+          <label><span>Fecha</span><input type="date" name="fecha" required></label>
+          <label id="campo-categoria">
+            <span>Categoría</span>
+            <input name="categoria" list="lista-categorias" placeholder="Escoge o escribe una">
+            <datalist id="lista-categorias"></datalist>
+          </label>
+          <label><span>Descripción</span><input name="descripcion" placeholder="Opcional"></label>
+          <label><span>Monto</span><input name="monto" class="monto" inputmode="numeric" placeholder="0" required></label>
+          <div class="acciones">
+            <button type="submit" class="boton primario" id="boton-guardar">Guardar</button>
+            <button type="button" class="boton" id="boton-cancelar" hidden>Cancelar</button>
+          </div>
+        </form>
+      </article>
+
+      <article class="panel">
+        <h3>Movimientos del año</h3>
+        <div class="tabla-contenedor">
+          <table class="tabla movimientos">
+            <thead>
+              <tr><th>Fecha</th><th>Tipo</th><th>Cuenta</th><th>Categoría</th><th>Descripción</th><th>Monto</th><th></th></tr>
+            </thead>
+            <tbody id="filas-movimientos"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section id="vista-historial" hidden>
+      <div class="navegacion">
+        <strong>Todas las semanas</strong>
+        <a class="boton" href="/api/exportar">Descargar CSV (Excel)</a>
+      </div>
+      <div class="tabla-contenedor">
+        <table class="tabla historial">
+          <thead>
+            <tr>
+              <th>Semana</th>
+              <th>Días</th>
+              <th>Ingresos</th>
+              <th>QR</th>
+              <th>Gastos</th>
+              <th>Total semana</th>
+              <th>Maza</th>
+              <th>Nómina</th>
+              <th class="col-total">Después nómina</th>
+            </tr>
+          </thead>
+          <tbody id="filas-historial"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
